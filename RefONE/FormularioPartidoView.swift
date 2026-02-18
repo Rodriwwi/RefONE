@@ -204,6 +204,13 @@ struct FormularioPartidoView: View {
         
         contexto.insert(nuevoPartido)
         
+        // Obtenemos los minutos seleccionados en la configuración
+        let opcionesGuardadas = UserDefaults.standard.string(forKey: "recordatoriosPartido") ?? ""
+        let minutos = opcionesGuardadas.split(separator: ",").compactMap { Int($0) }
+
+        // Programamos la notificación para este partido concreto
+        GestorNotificaciones.shared.programarNotificaciones(para: nuevoPartido, minutosAntes: minutos)
+        
         do {
             try contexto.save()
             sincronizarConWatch()

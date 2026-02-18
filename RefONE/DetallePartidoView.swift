@@ -4,6 +4,7 @@ import HealthKit
 import Charts
 import Combine
 
+// MARK: - Estructuras de Ayuda
 
 struct GridKey: Hashable {
     let x: Int
@@ -32,6 +33,20 @@ struct HeatBin: Identifiable {
     }
 }
 
+// Estructura para el mapa virtual (0.0 a 1.0)
+struct VirtualHeatBin: Identifiable {
+    let id = UUID()
+    let x: Double
+    let y: Double
+    let intensity: Double
+    
+    var color: Color {
+        if intensity > 0.75 { return Color.red }
+        else if intensity > 0.40 { return Color.orange }
+        else { return Color.yellow }
+    }
+}
+
 struct DatoZona: Identifiable {
     let id = UUID()
     let nombre: String
@@ -39,12 +54,14 @@ struct DatoZona: Identifiable {
     let color: Color
 }
 
-// MARK: - Main View
+// MARK: - Vista Principal
 
 struct DetallePartidoView: View {
     @Bindable var partido: Partido
     @StateObject private var vm = DetallePartidoViewModel()
     @State private var mostrandoEdicion = false
+    @State private var mostrandoCalibrador = false
+    @State private var tipoMapa: Int = 0 // 0 = Satélite, 1 = Esquemático
     
     // Configuración Persistente
     @AppStorage("fcMax") private var fcMax: Double = 190.0
@@ -59,13 +76,13 @@ struct DetallePartidoView: View {
         ScrollView {
             VStack(spacing: 0) {
                 
-                // Header: Date & Time
+                // Cabecera: Fecha y Hora
                 Text(partido.fecha.formatted(date: .long, time: .shortened))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.top, 20)
                 
-                // Header: Stadium
+                // Cabecera: Estadio
                 HStack {
                     Image(systemName: "sportscourt")
                     Text(partido.equipoLocal?.estadio?.nombre ?? "Estadio desconocido")
@@ -73,7 +90,7 @@ struct DetallePartidoView: View {
                 .font(.headline)
                 .padding(.top, 5)
                 
-                // Scoreboard Section
+                // Marcador
                 HStack(alignment: .center, spacing: 30) {
                     VStack {
                         ImagenEscudo(data: partido.equipoLocal?.escudoData, size: 70)
@@ -99,7 +116,7 @@ struct DetallePartidoView: View {
                 }
                 .padding(.vertical, 20)
                 
-                // Logistics Cost
+                // Coste Desplazamiento
                 if partido.costeDesplazamiento > 0 {
                     HStack {
                         Image(systemName: "car.fill")
@@ -114,7 +131,7 @@ struct DetallePartidoView: View {
                 
                 Divider().padding(.vertical, 20)
                 
-                // HealthKit Analytics
+                // Analíticas de Salud
                 if vm.datosDisponibles {
                     VStack(alignment: .leading, spacing: 30) {
                         
@@ -124,18 +141,16 @@ struct DetallePartidoView: View {
                         }
                         .padding(.horizontal)
                         
-                        // Metrics Grid
+                        // Grid de Métricas
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
                             DatoMetricView(titulo: "Duración", valor: vm.duracionString, icono: "stopwatch", color: .blue)
                             DatoMetricView(titulo: "Distancia", valor: String(format: "%.2f km", vm.distancia / 1000), icono: "figure.run", color: .green)
                             DatoMetricView(titulo: "Calorías", valor: String(format: "%.0f kcal", vm.calorias), icono: "flame.fill", color: .orange)
                             DatoMetricView(titulo: "Frecuencia Media", valor:String(format: "%.0f bpm", vm.ppmMedia), icono: "heart.fill", color: .red)
                             
-                            // 👇 LÓGICA INTELIGENTE: Velocidad o Cadencia
                             if vm.velocidadMaxima > 0.5 {
                                 DatoMetricView(titulo: "Velocidad Máx", valor: String(format: "%.1f km/h", vm.velocidadMaxima), icono: "speedometer", color: .purple)
                             } else {
-                                // Fallback: Calculamos Cadencia (Pasos / Minuto)
                                 let mins = vm.duracionTotal / 60
                                 let cadencia = mins > 0 ? Double(vm.pasosTotales) / mins : 0
                                 DatoMetricView(titulo: "Cadencia Media", valor: "\(Int(cadencia)) pasos/min", icono: "figure.step.training", color: .purple)
@@ -145,27 +160,94 @@ struct DetallePartidoView: View {
                         }
                         .padding(.horizontal)
                         
-                        // Heatmap
+                        // SECCIÓN MAPA
                         if !vm.heatMapBins.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
                                     Text("Mapa de Calor").font(.headline)
-                                    Image(systemName: "map.fill").foregroundStyle(.blue)
+                                    Spacer()
+                                    
+                                    // Botón Calibrar (Solo en modo esquemático)
+                                    if tipoMapa == 1 {
+                                        Button {
+                                            mostrandoCalibrador = true
+                                        } label: {
+                                            Image(systemName: "scope")
+                                                .font(.title3)
+                                        }
+                                        .padding(.trailing, 8)
+                                    }
+                                    
+                                    // Toggle Mapa
+                                    Picker("Tipo Mapa", selection: $tipoMapa) {
+                                        Image(systemName: "globe.europe.africa.fill").tag(0)
+                                        Image(systemName: "square.grid.2x2").tag(1)
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .frame(width: 120)
+                                    // 👇 CAMBIO 1: DETECCIÓN AUTOMÁTICA DE FALTA DE CALIBRACIÓN
+                                    .onChange(of: tipoMapa) { _, nuevoValor in
+                                        if nuevoValor == 1 && vm.esquinasUsuario.count < 3 {
+                                            // Si pasamos a Esquemático y no está calibrado, abrimos ventana
+                                            mostrandoCalibrador = true
+                                        }
+                                    }
                                 }
                                 .padding(.horizontal)
                                 
-                                Map {
-                                    ForEach(vm.heatMapBins) { bin in
-                                        MapPolygon(coordinates: bin.polygonCoordinates(gridSizeDegrees: heatGridSize))
-                                            .foregroundStyle(bin.color)
+                                ZStack {
+                                    if tipoMapa == 0 {
+                                        // 1. MAPA REAL (SATÉLITE)
+                                        Map {
+                                            ForEach(vm.heatMapBins) { bin in
+                                                MapPolygon(coordinates: bin.polygonCoordinates(gridSizeDegrees: heatGridSize))
+                                                    .foregroundStyle(bin.color)
+                                            }
+                                        }
+                                        .mapStyle(.imagery(elevation: .realistic))
+                                        
+                                    } else {
+                                        // 2. MAPA VIRTUAL (ESQUEMÁTICO) - CON CANVAS
+                                        CampoFutbolView()
+                                            .overlay {
+                                                GeometryReader { geo in
+                                                    Canvas { context, size in
+                                                        let radioPunto = size.width * 0.08
+                                                        
+                                                        for bin in vm.virtualHeatBins {
+                                                            let xPos = bin.x * size.width
+                                                            let yPos = bin.y * size.height
+                                                            
+                                                            let rect = CGRect(
+                                                                x: xPos - (radioPunto / 2),
+                                                                y: yPos - (radioPunto / 2),
+                                                                width: radioPunto,
+                                                                height: radioPunto
+                                                            )
+                                                            
+                                                            context.fill(
+                                                                Path(ellipseIn: rect),
+                                                                with: .color(bin.color.opacity(0.4))
+                                                            )
+                                                        }
+                                                    }
+                                                    .blur(radius: 10)
+                                                    .mask(RoundedRectangle(cornerRadius: 8))
+                                                }
+                                            }
                                     }
                                 }
-                                .mapStyle(.imagery(elevation: .realistic))
-                                .frame(height: 350).cornerRadius(12).padding(.horizontal)
+                                .frame(height: 450)
+                                .cornerRadius(12)
+                                .padding(.horizontal)
+                                .animation(.easeInOut, value: tipoMapa)
+                                
+                                Text(tipoMapa == 0 ? "Vista satélite real basada en coordenadas GPS." : "Vista esquemática. Si el campo no encaja, pulsa la mirilla para calibrar esquinas.")
+                                    .font(.caption2).italic().foregroundStyle(.secondary).padding(.horizontal)
                             }
                         }
                         
-                        // Heart Rate Zones Chart
+                        // Gráfica de Zonas Cardíacas
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Zonas de Esfuerzo").font(.headline).padding(.horizontal)
                             
@@ -181,7 +263,7 @@ struct DetallePartidoView: View {
                             .frame(height: 220)
                             .padding(.horizontal)
                             
-                            // LEYENDA DINÁMICA
+                            // Leyenda Dinámica
                             VStack(spacing: 8) {
                                 Group {
                                     HStack {
@@ -243,6 +325,12 @@ struct DetallePartidoView: View {
             NavigationStack { EditarPartidoView(partido: partido) }
                 .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $mostrandoCalibrador) {
+            CalibradorCampoView(rutaGPS: vm.rutaCoordenadasPublica) { esquinas in
+                vm.esquinasUsuario = esquinas
+                vm.generarMapaCalor() // Recalcula con la calibración
+            }
+        }
         .onAppear {
             vm.actualizarConfiguracion(fcMax: fcMax, l1: limiteZ1, l2: limiteZ2, l3: limiteZ3, l4: limiteZ4)
             vm.cargarEntrenamiento(id: partido.workoutID)
@@ -253,6 +341,37 @@ struct DetallePartidoView: View {
                 partido.caloriasQuemadas = vm.calorias
             }
         }
+    }
+}
+
+// MARK: - Vista Dibujada del Campo de Fútbol
+
+struct CampoFutbolView: View {
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                Rectangle()
+                    .fill(LinearGradient(colors: [Color(hue: 0.35, saturation: 0.7, brightness: 0.6), Color(hue: 0.35, saturation: 0.7, brightness: 0.5)], startPoint: .top, endPoint: .bottom))
+                
+                Group {
+                    Rectangle().stroke(.white.opacity(0.6), lineWidth: 2).padding(4)
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: geo.size.height / 2))
+                        path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 2))
+                    }.stroke(.white.opacity(0.6), lineWidth: 2)
+                    Circle().stroke(.white.opacity(0.6), lineWidth: 2).frame(width: geo.size.width * 0.3)
+                    
+                    Rectangle().stroke(.white.opacity(0.6), lineWidth: 2)
+                        .frame(width: geo.size.width * 0.5, height: geo.size.height * 0.15)
+                        .position(x: geo.size.width / 2, y: geo.size.height * 0.075 + 4)
+                    
+                    Rectangle().stroke(.white.opacity(0.6), lineWidth: 2)
+                        .frame(width: geo.size.width * 0.5, height: geo.size.height * 0.15)
+                        .position(x: geo.size.width / 2, y: geo.size.height - (geo.size.height * 0.075) - 4)
+                }
+            }
+        }
+        .cornerRadius(8)
     }
 }
 
@@ -319,7 +438,7 @@ struct EditarPartidoView: View {
     }
 }
 
-// MARK: - ViewModel (Completo)
+// MARK: - ViewModel
 
 class DetallePartidoViewModel: ObservableObject {
     @Published var datosDisponibles = false
@@ -334,14 +453,18 @@ class DetallePartidoViewModel: ObservableObject {
     @Published var velocidadMaxima: Double = 0
     @Published var pasosTotales: Int = 0
     @Published var zonasCardiacas: [DatoZona] = []
+    
+    // Arrays para Mapas
     @Published var heatMapBins: [HeatBin] = []
+    @Published var virtualHeatBins: [VirtualHeatBin] = []
     @Published var rutaCoordenadasPublica: [CLLocationCoordinate2D] = []
+    @Published var esquinasUsuario: [CLLocationCoordinate2D] = [] // Calibración
     
     private var rutaCoordenadasRaw: [CLLocationCoordinate2D] = []
     private let healthStore = HKHealthStore()
     private let calculationGridSize = 0.00002
     
-    // Configuración Inyectada
+    // Configuración
     private var fcMax: Double = 190.0
     private var limitZ1: Double = 0.60
     private var limitZ2: Double = 0.70
@@ -349,59 +472,39 @@ class DetallePartidoViewModel: ObservableObject {
     private var limitZ4: Double = 0.90
     
     func actualizarConfiguracion(fcMax: Double, l1: Double, l2: Double, l3: Double, l4: Double) {
-        self.fcMax = fcMax
-        self.limitZ1 = l1
-        self.limitZ2 = l2
-        self.limitZ3 = l3
-        self.limitZ4 = l4
-    }
-    
-    func solicitarPermisosLectura() {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
-        let tiposALeer: Set<HKObjectType> = [
-            HKObjectType.workoutType(), HKSeriesType.workoutRoute(),
-            HKObjectType.quantityType(forIdentifier: .heartRate)!, HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!,
-            HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!, HKObjectType.quantityType(forIdentifier: .runningSpeed)!,
-            HKObjectType.quantityType(forIdentifier: .stepCount)!
-        ]
-        healthStore.requestAuthorization(toShare: nil, read: tiposALeer) { _, _ in }
+        self.fcMax = fcMax; self.limitZ1 = l1; self.limitZ2 = l2; self.limitZ3 = l3; self.limitZ4 = l4
     }
     
     func cargarEntrenamiento(id: UUID?) {
-        self.datosDisponibles = false
-        self.cargando = true
-        self.mensajeError = nil
-        
+        self.datosDisponibles = false; self.cargando = true; self.mensajeError = nil
         solicitarPermisosLectura()
         
         guard let id = id else {
-            DispatchQueue.main.async {
-                self.mensajeError = "Este partido se creó manualmente en el iPhone sin vincular un entrenamiento del reloj."
-                self.cargando = false
-            }
+            DispatchQueue.main.async { self.mensajeError = "Este partido se creó manualmente en el iPhone sin vincular un entrenamiento del reloj."; self.cargando = false }
             return
         }
         
         let predicate = HKQuery.predicateForObject(with: id)
         let query = HKSampleQuery(sampleType: HKObjectType.workoutType(), predicate: predicate, limit: 1, sortDescriptors: nil) { _, samples, error in
-            
             guard let workouts = samples as? [HKWorkout], let workout = workouts.first else {
-                DispatchQueue.main.async {
-                    self.mensajeError = "No se encontró el registro en la App Salud. Puede que haya sido eliminado o no se haya sincronizado."
-                    self.cargando = false
-                }
+                DispatchQueue.main.async { self.mensajeError = "No se encontró el registro en la App Salud."; self.cargando = false }
                 return
             }
-            
             DispatchQueue.main.async { self.procesarDatosReales(workout: workout) }
         }
         healthStore.execute(query)
     }
     
+    func solicitarPermisosLectura() {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let tipos: Set<HKObjectType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute(), HKObjectType.quantityType(forIdentifier: .heartRate)!, HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!, HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!, HKObjectType.quantityType(forIdentifier: .runningSpeed)!, HKObjectType.quantityType(forIdentifier: .stepCount)!]
+        healthStore.requestAuthorization(toShare: nil, read: tipos) { _, _ in }
+    }
+    
     func procesarDatosReales(workout: HKWorkout) {
         self.calorias = workout.totalEnergyBurned?.doubleValue(for: .kilocalorie()) ?? 0
         self.distancia = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
-        self.duracionTotal = workout.duration // Guardamos el tiempo real
+        self.duracionTotal = workout.duration
         self.duracionString = self.formatearDuracion(workout.duration)
         
         self.cargarFrecuenciaCardiaca(workout: workout)
@@ -411,25 +514,25 @@ class DetallePartidoViewModel: ObservableObject {
         self.calcularZonasReales(workout: workout)
     }
     
-    // --- Métodos de carga ---
+    // --- Cargas de Datos ---
     
     func cargarVelocidadMaxima(workout: HKWorkout) {
-        guard let speedType = HKQuantityType.quantityType(forIdentifier: .runningSpeed) else { return }
+        guard let type = HKQuantityType.quantityType(forIdentifier: .runningSpeed) else { return }
         let predicate = HKQuery.predicateForSamples(withStart: workout.startDate, end: workout.endDate)
-        let query = HKStatisticsQuery(quantityType: speedType, quantitySamplePredicate: predicate, options: .discreteMax) { _, result, _ in
-            if let maxSpeed = result?.maximumQuantity() {
-                let mps = maxSpeed.doubleValue(for: HKUnit.meter().unitDivided(by: .second()))
-                DispatchQueue.main.async { self.velocidadMaxima = mps * 3.6 }
+        let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .discreteMax) { _, res, _ in
+            if let max = res?.maximumQuantity() {
+                let val = max.doubleValue(for: HKUnit.meter().unitDivided(by: .second()))
+                DispatchQueue.main.async { self.velocidadMaxima = val * 3.6 }
             }
         }
         healthStore.execute(query)
     }
     
     func cargarPasos(workout: HKWorkout) {
-        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
+        guard let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
         let predicate = HKQuery.predicateForSamples(withStart: workout.startDate, end: workout.endDate)
-        let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
-            if let sum = result?.sumQuantity() {
+        let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, res, _ in
+            if let sum = res?.sumQuantity() {
                 DispatchQueue.main.async { self.pasosTotales = Int(sum.doubleValue(for: .count())) }
             }
         }
@@ -437,38 +540,32 @@ class DetallePartidoViewModel: ObservableObject {
     }
     
     func cargarFrecuenciaCardiaca(workout: HKWorkout) {
-        let tipoHR = HKQuantityType.quantityType(forIdentifier: .heartRate)!
+        let type = HKQuantityType.quantityType(forIdentifier: .heartRate)!
         let predicate = HKQuery.predicateForSamples(withStart: workout.startDate, end: workout.endDate)
-        let statsQuery = HKStatisticsQuery(quantityType: tipoHR, quantitySamplePredicate: predicate, options: .discreteAverage) { _, stats, _ in
-            if let avg = stats?.averageQuantity() {
+        let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .discreteAverage) { _, res, _ in
+            if let avg = res?.averageQuantity() {
                 DispatchQueue.main.async { self.ppmMedia = avg.doubleValue(for: HKUnit(from: "count/min")) }
             }
         }
-        healthStore.execute(statsQuery)
+        healthStore.execute(query)
     }
     
     func calcularZonasReales(workout: HKWorkout) {
-        let tipoHR = HKQuantityType.quantityType(forIdentifier: .heartRate)!
+        let type = HKQuantityType.quantityType(forIdentifier: .heartRate)!
         let predicate = HKQuery.predicateForSamples(withStart: workout.startDate, end: workout.endDate)
-        
-        let query = HKSampleQuery(sampleType: tipoHR, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { _, samples, _ in
+        let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { _, samples, _ in
             guard let muestras = samples as? [HKQuantitySample], !muestras.isEmpty else { return }
-            
             var tZ1: TimeInterval = 0; var tZ2: TimeInterval = 0; var tZ3: TimeInterval = 0; var tZ4: TimeInterval = 0; var tZ5: TimeInterval = 0
-            
             for i in 0..<(muestras.count - 1) {
                 let actual = muestras[i]
-                let duracion = min(muestras[i+1].startDate.timeIntervalSince(actual.startDate), 10.0)
-                let bpm = actual.quantity.doubleValue(for: HKUnit(from: "count/min"))
-                let p = bpm / self.fcMax
-                
-                if p < self.limitZ1 { tZ1 += duracion }
-                else if p < self.limitZ2 { tZ2 += duracion }
-                else if p < self.limitZ3 { tZ3 += duracion }
-                else if p < self.limitZ4 { tZ4 += duracion }
-                else { tZ5 += duracion }
+                let dur = min(muestras[i+1].startDate.timeIntervalSince(actual.startDate), 10.0)
+                let p = actual.quantity.doubleValue(for: HKUnit(from: "count/min")) / self.fcMax
+                if p < self.limitZ1 { tZ1 += dur }
+                else if p < self.limitZ2 { tZ2 += dur }
+                else if p < self.limitZ3 { tZ3 += dur }
+                else if p < self.limitZ4 { tZ4 += dur }
+                else { tZ5 += dur }
             }
-            
             DispatchQueue.main.async {
                 self.zonasCardiacas = [
                     DatoZona(nombre: "Z1", minutos: tZ1/60, color: .blue.opacity(0.6)),
@@ -484,65 +581,44 @@ class DetallePartidoViewModel: ObservableObject {
     
     func cargarRuta(workout: HKWorkout) {
         self.rutaCoordenadasRaw = []
-        let tipoRuta = HKSeriesType.workoutRoute()
+        let type = HKSeriesType.workoutRoute()
         let predicate = HKQuery.predicateForObjects(from: workout)
-        
-        let rutaQuery = HKSampleQuery(sampleType: tipoRuta, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
-            guard let rutas = samples as? [HKWorkoutRoute] else {
-                DispatchQueue.main.async { self.finalizarCarga() }
-                return
-            }
-            
+        let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+            guard let rutas = samples as? [HKWorkoutRoute] else { DispatchQueue.main.async { self.finalizarCarga() }; return }
             let grupo = DispatchGroup()
-            
             for ruta in rutas {
                 grupo.enter()
-                let queryDatos = HKWorkoutRouteQuery(route: ruta) { query, locations, done, error in
-                    if let locations = locations {
-                        self.rutaCoordenadasRaw.append(contentsOf: locations.map { $0.coordinate })
-                    }
+                let q = HKWorkoutRouteQuery(route: ruta) { q, locs, done, err in
+                    if let locs = locs { self.rutaCoordenadasRaw.append(contentsOf: locs.map { $0.coordinate }) }
                     if done { grupo.leave() }
                 }
-                self.healthStore.execute(queryDatos)
+                self.healthStore.execute(q)
             }
-            
             grupo.notify(queue: .main) {
-                let rawData = self.rutaCoordenadasRaw
-                let rutaFiltrada = self.filtrarPuntosFueraDelCampo(rawData)
-                self.rutaCoordenadasPublica = rutaFiltrada
-                self.rutaCoordenadasRaw = rutaFiltrada
-                
+                let raw = self.rutaCoordenadasRaw
+                let clean = self.filtrarPuntosFueraDelCampo(raw)
+                self.rutaCoordenadasPublica = clean
+                self.rutaCoordenadasRaw = clean
                 self.generarMapaCalor()
                 self.finalizarCarga()
             }
         }
-        healthStore.execute(rutaQuery)
+        healthStore.execute(query)
     }
     
     private func filtrarPuntosFueraDelCampo(_ puntos: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
         guard !puntos.isEmpty else { return [] }
-        
-        let latPromedio = puntos.map { $0.latitude }.reduce(0, +) / Double(puntos.count)
-        let lonPromedio = puntos.map { $0.longitude }.reduce(0, +) / Double(puntos.count)
-        let centroDelCampo = CLLocation(latitude: latPromedio, longitude: lonPromedio)
-        
-        let radioMaximoMetros: CLLocationDistance = 85.0
-        
-        return puntos.filter { coord in
-            let ubicacionPunto = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
-            let distancia = ubicacionPunto.distance(from: centroDelCampo)
-            return distancia < radioMaximoMetros
-        }
+        let latProm = puntos.map { $0.latitude }.reduce(0, +) / Double(puntos.count)
+        let lonProm = puntos.map { $0.longitude }.reduce(0, +) / Double(puntos.count)
+        let centro = CLLocation(latitude: latProm, longitude: lonProm)
+        return puntos.filter { CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: centro) < 85.0 }
     }
     
-    func finalizarCarga() {
-        self.datosDisponibles = true
-        self.cargando = false
-    }
-    
-    private func generarMapaCalor() {
+    // MARK: - Generación de Mapas (Real y Virtual Calibrado)
+    func generarMapaCalor() {
         guard !rutaCoordenadasRaw.isEmpty else { return }
         
+        // 1. MAPA REAL (Satélite)
         var gridCounts: [GridKey: Int] = [:]
         var maxCount = 0
         
@@ -550,38 +626,337 @@ class DetallePartidoViewModel: ObservableObject {
             let gridX = Int(coord.latitude / calculationGridSize)
             let gridY = Int(coord.longitude / calculationGridSize)
             let key = GridKey(x: gridX, y: gridY)
-            
-            let newCount = (gridCounts[key] ?? 0) + 1
-            gridCounts[key] = newCount
-            maxCount = max(maxCount, newCount)
+            let count = (gridCounts[key] ?? 0) + 1
+            gridCounts[key] = count
+            maxCount = max(maxCount, count)
         }
-        
-        guard maxCount > 0 else { return }
         
         let saturacion = max(Double(maxCount) * 0.30, 2.0)
         
-        var bins: [HeatBin] = []
+        var realBins: [HeatBin] = []
         for (key, count) in gridCounts {
             let centerLat = (Double(key.x) * calculationGridSize) + (calculationGridSize / 2.0)
             let centerLon = (Double(key.y) * calculationGridSize) + (calculationGridSize / 2.0)
-            
-            let rawIntensity = Double(count) / saturacion
-            let finalIntensity = min(rawIntensity, 1.0)
-            
-            bins.append(HeatBin(
-                center: CLLocationCoordinate2D(latitude: centerLat, longitude: centerLon),
-                intensity: finalIntensity
-            ))
+            let intensity = min(Double(count) / saturacion, 1.0)
+            realBins.append(HeatBin(center: CLLocationCoordinate2D(latitude: centerLat, longitude: centerLon), intensity: intensity))
         }
-        self.heatMapBins = bins
+        self.heatMapBins = realBins
+        
+        // 2. MAPA VIRTUAL (Elección: Calibrado vs Automático)
+        if esquinasUsuario.count == 3 {
+            generarMapaVirtualCalibrado(puntos: rutaCoordenadasRaw, esquinas: esquinasUsuario)
+        } else {
+            generarMapaVirtualAutomatico(puntos: rutaCoordenadasRaw)
+        }
     }
     
+    private func generarMapaVirtualCalibrado(puntos: [CLLocationCoordinate2D], esquinas: [CLLocationCoordinate2D]) {
+        let pTL = MKMapPoint(esquinas[0])
+        let pTR = MKMapPoint(esquinas[1])
+        let pBL = MKMapPoint(esquinas[2])
+        
+        // Vectores Base (Ejes U y V)
+        let vectorU = (x: pTR.x - pTL.x, y: pTR.y - pTL.y)
+        let lenU_sq = vectorU.x * vectorU.x + vectorU.y * vectorU.y
+        
+        let vectorV = (x: pBL.x - pTL.x, y: pBL.y - pTL.y)
+        let lenV_sq = vectorV.x * vectorV.x + vectorV.y * vectorV.y
+        
+        var virtualGrid: [String: Int] = [:]
+        var maxCount = 0
+        
+        for coord in puntos {
+            let p = MKMapPoint(coord)
+            let vecP = (x: p.x - pTL.x, y: p.y - pTL.y)
+            
+            // Proyección escalar
+            let projU = (vecP.x * vectorU.x + vecP.y * vectorU.y) / lenU_sq
+            let projV = (vecP.x * vectorV.x + vecP.y * vectorV.y) / lenV_sq
+            
+            // Filtro con margen
+            if projU >= -0.1 && projU <= 1.1 && projV >= -0.1 && projV <= 1.1 {
+                let cellX = Int(projU * 40)
+                let cellY = Int(projV * 60)
+                let key = "\(cellX)-\(cellY)"
+                
+                let c = (virtualGrid[key] ?? 0) + 1
+                virtualGrid[key] = c
+                maxCount = max(maxCount, c)
+            }
+        }
+        
+        let saturacion = max(Double(maxCount) * 0.30, 2.0)
+        var bins: [VirtualHeatBin] = []
+        
+        for (key, count) in virtualGrid {
+            let parts = key.split(separator: "-")
+            if let cx = Int(parts[0]), let cy = Int(parts[1]) {
+                let x = (Double(cx) + 0.5) / 40.0
+                let y = (Double(cy) + 0.5) / 60.0
+                let intensity = min(Double(count) / saturacion, 1.0)
+                bins.append(VirtualHeatBin(x: x, y: y, intensity: intensity))
+            }
+        }
+        self.virtualHeatBins = bins
+    }
+    
+    // Versión automática (PCA) si no hay calibración
+    private func generarMapaVirtualAutomatico(puntos: [CLLocationCoordinate2D]) {
+        let puntosPlanos = puntos.map { MKMapPoint($0) }
+        let centroX = puntosPlanos.map { $0.x }.reduce(0, +) / Double(puntosPlanos.count)
+        let centroY = puntosPlanos.map { $0.y }.reduce(0, +) / Double(puntosPlanos.count)
+        let centro = MKMapPoint(x: centroX, y: centroY)
+        
+        let anguloRotacion = calcularRotacionOptima(puntos: puntosPlanos, centro: centro)
+        let puntosRotados = puntosPlanos.map { rotarPunto($0, centro: centro, angulo: anguloRotacion) }
+        
+        var minX = Double.greatestFiniteMagnitude, maxX = -Double.greatestFiniteMagnitude
+        var minY = Double.greatestFiniteMagnitude, maxY = -Double.greatestFiniteMagnitude
+        
+        for p in puntosRotados {
+            if p.x < minX { minX = p.x }
+            if p.x > maxX { maxX = p.x }
+            if p.y < minY { minY = p.y }
+            if p.y > maxY { maxY = p.y }
+        }
+        
+        let width = maxX - minX
+        let height = maxY - minY
+        let esHorizontal = width > height
+        
+        var virtualGrid: [String: Int] = [:]
+        var maxCount = 0
+        
+        for p in puntosRotados {
+            var normX = (p.x - minX) / width
+            var normY = (p.y - minY) / height
+            
+            if esHorizontal {
+                let temp = normX; normX = normY; normY = 1.0 - temp
+            } else {
+                normY = 1.0 - normY
+            }
+            
+            let cellX = Int(normX * 40)
+            let cellY = Int(normY * 60)
+            let key = "\(cellX)-\(cellY)"
+            let c = (virtualGrid[key] ?? 0) + 1
+            virtualGrid[key] = c
+            maxCount = max(maxCount, c)
+        }
+        
+        let saturacion = max(Double(maxCount) * 0.30, 2.0)
+        var bins: [VirtualHeatBin] = []
+        for (key, count) in virtualGrid {
+            let parts = key.split(separator: "-")
+            if let cx = Int(parts[0]), let cy = Int(parts[1]) {
+                let x = (Double(cx) + 0.5) / 40.0
+                let y = (Double(cy) + 0.5) / 60.0
+                let intensity = min(Double(count) / saturacion, 1.0)
+                bins.append(VirtualHeatBin(x: x, y: y, intensity: intensity))
+            }
+        }
+        self.virtualHeatBins = bins
+    }
+    
+    private func calcularRotacionOptima(puntos: [MKMapPoint], centro: MKMapPoint) -> Double {
+        var num: Double = 0, den: Double = 0
+        for p in puntos {
+            let dx = p.x - centro.x; let dy = p.y - centro.y
+            num += 2 * dx * dy
+            den += (dx * dx) - (dy * dy)
+        }
+        return 0.5 * atan2(den, num)
+    }
+    
+    private func rotarPunto(_ p: MKMapPoint, centro: MKMapPoint, angulo: Double) -> MKMapPoint {
+        let dx = p.x - centro.x; let dy = p.y - centro.y
+        let xRot = dx * cos(angulo) - dy * sin(angulo)
+        let yRot = dx * sin(angulo) + dy * cos(angulo)
+        return MKMapPoint(x: centro.x + xRot, y: centro.y + yRot)
+    }
+    
+    func finalizarCarga() { self.datosDisponibles = true; self.cargando = false }
+    
     func formatearDuracion(_ duracion: TimeInterval) -> String {
-        let formatter = DateComponentsFormatter(); formatter.allowedUnits = [.hour, .minute, .second]; formatter.unitsStyle = .abbreviated; return formatter.string(from: duracion) ?? ""
+        let f = DateComponentsFormatter(); f.allowedUnits = [.hour, .minute, .second]; f.unitsStyle = .abbreviated
+        return f.string(from: duracion) ?? ""
     }
 }
 
 // MARK: - Components
+
+struct CalibradorCampoView: View {
+    @Environment(\.dismiss) var dismiss
+    
+    let rutaGPS: [CLLocationCoordinate2D]
+    var alTerminar: ([CLLocationCoordinate2D]) -> Void
+    
+    @State private var esquinas: [CLLocationCoordinate2D] = []
+    @State private var position: MapCameraPosition = .automatic
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                Group {
+                    if esquinas.isEmpty {
+                        Text("1. Mueve el mapa hasta centrar la\n**Esquina Superior Izquierda**")
+                    } else if esquinas.count == 1 {
+                        Text("2. Ahora centra la\n**Esquina Superior Derecha**")
+                    } else if esquinas.count == 2 {
+                        Text("3. Finalmente, centra la\n**Esquina Inferior Izquierda**")
+                    } else {
+                        Text("¡Campo definido! Pulsa Guardar.")
+                            .foregroundStyle(.green)
+                    }
+                }
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(.regularMaterial)
+                
+                // Contenedor del Mapa
+                GeometryReader { geo in
+                    MapReader { proxy in
+                        ZStack {
+                            // 1. EL MAPA
+                            Map(position: $position) {
+                                // Ruta de referencia (Azul flojo)
+                                if !rutaGPS.isEmpty {
+                                    MapPolyline(coordinates: rutaGPS)
+                                        .stroke(.blue.opacity(0.3), lineWidth: 4)
+                                }
+                                
+                                // Puntos ya marcados
+                                ForEach(0..<esquinas.count, id: \.self) { i in
+                                    Annotation("P\(i+1)", coordinate: esquinas[i]) {
+                                        Image(systemName: "\(i+1).circle.fill")
+                                            .font(.title)
+                                            .foregroundStyle(.red)
+                                            .background(.white)
+                                            .clipShape(Circle())
+                                            .shadow(radius: 2)
+                                    }
+                                }
+                                
+                                // Previsualización del campo (Verde)
+                                if esquinas.count == 3 {
+                                    MapPolygon(coordinates: calcularRectangulo(p1: esquinas[0], p2: esquinas[1], p3: esquinas[2]))
+                                        .foregroundStyle(.green.opacity(0.3))
+                                        .stroke(.green, lineWidth: 2)
+                                }
+                            }
+                            .mapStyle(.imagery(elevation: .realistic))
+                            
+                            // 2. MIRILLA CENTRAL (CROSSHAIR)
+                            // Solo se muestra si faltan puntos por poner
+                            if esquinas.count < 3 {
+                                ZStack {
+                                    Circle()
+                                        .stroke(.white, lineWidth: 2)
+                                        .shadow(radius: 4)
+                                    Image(systemName: "plus")
+                                        .font(.largeTitle)
+                                        .foregroundStyle(.white)
+                                        .shadow(radius: 4)
+                                }
+                                .frame(width: 50, height: 50)
+                            }
+                            
+                            // 3. BOTÓN DE ACCIÓN (FLOTANTE)
+                            VStack {
+                                Spacer()
+                                
+                                if esquinas.count < 3 {
+                                    Button {
+                                        // MAGIA: Obtenemos la coordenada justo del centro de la vista
+                                        // Usamos geo.size para saber el centro exacto del área del mapa
+                                        let centroPantalla = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+                                        
+                                        if let coordenada = proxy.convert(centroPantalla, from: .local) {
+                                            // Pequeña vibración de confirmación
+                                            let generator = UIImpactFeedbackGenerator(style: .medium)
+                                            generator.impactOccurred()
+                                            
+                                            withAnimation {
+                                                esquinas.append(coordenada)
+                                            }
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "target")
+                                            Text("Fijar Punto \(esquinas.count + 1)")
+                                        }
+                                        .font(.headline)
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 24)
+                                        .padding(.vertical, 16)
+                                        .background(Color.blue)
+                                        .clipShape(Capsule())
+                                        .shadow(radius: 10)
+                                    }
+                                    .padding(.bottom, 20)
+                                }
+                            }
+                            
+                            // 4. BOTÓN DESHACER (FLOTANTE ARRIBA)
+                            if !esquinas.isEmpty {
+                                VStack {
+                                    HStack {
+                                        Button {
+                                            _ = esquinas.popLast()
+                                        } label: {
+                                            Label("Deshacer", systemImage: "arrow.uturn.backward")
+                                                .font(.caption)
+                                                .padding(8)
+                                                .background(.thinMaterial)
+                                                .cornerRadius(8)
+                                        }
+                                        .padding(.leading)
+                                        Spacer()
+                                    }
+                                    .padding(.top, 10)
+                                    Spacer()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Calibrar Campo")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Guardar") {
+                        if esquinas.count == 3 {
+                            alTerminar(esquinas)
+                            dismiss()
+                        }
+                    }
+                    .disabled(esquinas.count != 3)
+                }
+            }
+        }
+    }
+    
+    // Función auxiliar matemática
+    func calcularRectangulo(p1: CLLocationCoordinate2D, p2: CLLocationCoordinate2D, p3: CLLocationCoordinate2D) -> [CLLocationCoordinate2D] {
+        let mp1 = MKMapPoint(p1)
+        let mp2 = MKMapPoint(p2)
+        let mp3 = MKMapPoint(p3)
+        
+        let vecX = mp2.x - mp1.x
+        let vecY = mp2.y - mp1.y
+        
+        // P4 es P3 + el vector que va de P1 a P2
+        let mp4 = MKMapPoint(x: mp3.x + vecX, y: mp3.y + vecY)
+        return [p1, p2, mp4.coordinate, p3]
+    }
+}
 
 struct DatoMetricView: View {
     let titulo: String; let valor: String; let icono: String; let color: Color
