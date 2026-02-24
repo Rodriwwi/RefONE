@@ -27,8 +27,8 @@ struct EstadisticasView: View {
     // Constantes de diseño
     private let cDinero = Color.green
     private let cStats = Color.blue
-    private let cRolPrincipal = Color.indigo
-    private let cRolAsistente = Color.orange
+    private let cRolPrincipal = Color(hex: "#FF5A36")
+    private let cRolAsistente = Color(hex: "#1F73FF")
     
     var body: some View {
         NavigationStack {

@@ -143,7 +143,7 @@ struct FormularioPartidoView: View {
                                 .font(.caption2)
                                 .bold()
                                 .padding(4)
-                                .background(rol == .principal ? Color.indigo.opacity(0.2) : Color.orange.opacity(0.2))
+                                .background(rol == .principal ? Color.indigo.opacity(0.2) : Color(hex: "#FF5A36").opacity(0.2))
                                 .foregroundStyle(rol == .principal ? .indigo : .orange)
                                 .cornerRadius(4)
                             

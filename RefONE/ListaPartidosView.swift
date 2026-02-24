@@ -37,7 +37,6 @@ struct ListaPartidosView: View {
         }
         .navigationTitle("Partidos")
         .background(Color(UIColor.systemGroupedBackground))
-        // 👇 AQUÍ ESTÁN LOS CAMBIOS EN LA TOOLBAR 👇
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
@@ -62,8 +61,6 @@ struct ListaPartidosView: View {
                 }
             }
         }
-        // 👆 FIN DE LOS CAMBIOS 👆
-        
         .sheet(isPresented: $esModoCreacion) {
             NavigationStack { FormularioPartidoView() }
         }
@@ -239,94 +236,130 @@ struct CeldaPartido: View {
 
 // MARK: - Celdas Específicas
 
+// CELDA DE PRÓXIMO PARTIDO (DISEÑO PÓSTER - REFINADO)
 struct VistaCeldaProximo: View {
     let partido: Partido
     
     var body: some View {
-        VStack(spacing: 12) {
-            // Etiqueta de Categoría
-            Text(partido.categoria?.nombre.uppercased() ?? "PARTIDO")
-                .font(.caption2)
-                .bold()
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.orange)
-                .clipShape(Capsule())
+        VStack(spacing: 0) {
             
-            // Bloque de Enfrentamiento
-            HStack(alignment: .center, spacing: 6) {
-                // Equipo Local
-                HStack(spacing: 4) {
-                    ImagenEscudo(data: partido.equipoLocal?.escudoData, size: 24)
-                    
-                    Rectangle()
-                        .fill(resolveColor(hex: partido.colorLocalHexPartido, fallback: partido.equipoLocal?.colorHex, defaultHex: "#000000"))
-                        .frame(width: 4, height: 20)
-                        .overlay(Rectangle().stroke(Color.primary.opacity(0.2), lineWidth: 1))
-                    
-                    Text(partido.equipoLocal?.nombre ?? "Local")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                
-                Text("vs")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 2)
-                
-                // Equipo Visitante
-                HStack(spacing: 4) {
-                    Text(partido.equipoVisitante?.nombre ?? "Visitante")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    
-                    Rectangle()
-                        .fill(resolveColor(hex: partido.colorVisitanteHexPartido, fallback: partido.equipoVisitante?.colorVisitanteHex, defaultHex: "#FFFFFF"))
-                        .frame(width: 4, height: 20)
-                        .overlay(Rectangle().stroke(Color.primary.opacity(0.2), lineWidth: 1))
-                    
-                    ImagenEscudo(data: partido.equipoVisitante?.escudoData, size: 24)
-                }
-            }
-            .frame(maxWidth: .infinity)
+            // ----------------------------------------------------
+            // CUADRADO 1: CATEGORÍA CENTRADA
+            // ----------------------------------------------------
+            Text(partido.categoria?.nombre.uppercased() ?? "AMISTOSO")
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(Color(hex: "#FF5A36"))
             
             Divider()
             
-            // Footer: Fecha y Estadio
+            // ----------------------------------------------------
+            // CUADRADO 2: ENFRENTAMIENTO Y LÍNEA DE COLOR
+            // ----------------------------------------------------
+            VStack(spacing: 0) {
+                
+                HStack(spacing: 0) {
+                    // --- LADO LOCAL ---
+                    HStack(spacing: 0) {
+                        ImagenEscudo(data: partido.equipoLocal?.escudoData, size: 50)
+                        
+                        Spacer(minLength: 0)
+                        
+                        
+                        Text(partido.equipoLocal?.acronimo ?? "LOC")
+                            .font(.system(size: 26, weight: .bold, design: .default))
+                            .foregroundStyle(.primary)
+                        
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity)
+                    
+                    // --- VS CENTRAL ---
+                    Text("VS")
+                        .font(.system(size: 24, weight: .black))
+                        .foregroundStyle(.tertiary)
+                        .italic()
+                        .padding(.horizontal, 6)
+                    
+                    // --- LADO VISITANTE ---
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        
+                        // ACRÓNIMO: Letra más fina y elegante, con espaciado
+                        Text(partido.equipoVisitante?.acronimo ?? "VIS")
+                            .font(.system(size: 26, weight: .bold, design: .default))
+                            .foregroundStyle(.primary)
+                        
+                        Spacer(minLength: 0)
+                        
+                        ImagenEscudo(data: partido.equipoVisitante?.escudoData, size: 50)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+                
+                // LÍNEA DE COLORES DE EQUIPACIÓN
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(resolveColor(hex: partido.colorLocalHexPartido, fallback: partido.equipoLocal?.colorHex, defaultHex: "#000000"))
+                    
+                    Rectangle()
+                        .fill(resolveColor(hex: partido.colorVisitanteHexPartido, fallback: partido.equipoVisitante?.colorVisitanteHex, defaultHex: "#FFFFFF"))
+                }
+                .frame(height: 6) // Damos la altura a todo el bloque a la vez
+                // Borde sutil para que el blanco y el negro destaquen sin importar el modo claro/oscuro
+                .overlay(
+                    Rectangle().stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
+                )
+            }
+            .background(Color(UIColor.secondarySystemGroupedBackground))
+            
+            Divider()
+            
+            // ----------------------------------------------------
+            // CUADRADO 3: FECHA Y ESTADIO
+            // ----------------------------------------------------
             VStack(spacing: 4) {
-                Text(partido.fecha.formatted(date: .long, time: .shortened))
-                    .font(.caption)
-                    .bold()
+                Text(partido.fecha.formatted(date: .complete, time: .shortened))
+                    .font(.subheadline)
+                    .fontWeight(.medium)
                     .foregroundStyle(.primary)
                 
                 HStack(spacing: 4) {
-                    Image(systemName: "sportscourt")
-                    Text(partido.equipoLocal?.estadio?.nombre ?? "Sin estadio")
+                    Image(systemName: "sportscourt.fill")
+                    Text(partido.equipoLocal?.estadio?.nombre ?? "Estadio por definir")
                 }
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(Color(UIColor.secondarySystemGroupedBackground))
+            
         }
-        .padding(12)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
-        .padding(.horizontal)
-        .padding(.vertical, 4)
+        // Estilo del contenedor global
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 6)
     }
     
-    // Helper visual para resolución de colores
     private func resolveColor(hex: String, fallback: String?, defaultHex: String) -> Color {
         let finalHex = !hex.isEmpty ? hex : (fallback ?? defaultHex)
         return finalHex.toColor()
     }
 }
 
+// CELDA DE PARTIDO DISPUTADO (SE MANTIENE INTACTA)
 struct VistaCeldaDisputado: View {
     let partido: Partido
     
@@ -353,7 +386,7 @@ struct VistaCeldaDisputado: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.orange)
+                    .background(Color(hex: "#FF5A36"))
                     .clipShape(Capsule())
                 
                 // Local
@@ -400,12 +433,73 @@ struct VistaCeldaDisputado: View {
         .background(Color(UIColor.secondarySystemGroupedBackground))
         .cornerRadius(10)
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.1), lineWidth: 1))
-        .padding(.horizontal)
+        .padding(.horizontal, 2) // Añadido un pequeño padding horizontal extra para equiparar la sombra
         .padding(.vertical, 2)
     }
     
     private func resolveColor(hex: String, fallback: String?, defaultHex: String) -> Color {
         let finalHex = !hex.isEmpty ? hex : (fallback ?? defaultHex)
         return finalHex.toColor()
+    }
+}
+
+// MARK: - Subvistas Auxiliares Reutilizables
+
+struct IndicadorColorEquipacionList: View {
+    let hex: String
+    var body: some View {
+        Circle()
+            .fill(hex.toColor())
+            .frame(width: 12, height: 12)
+            .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
+    }
+}
+
+struct ImagenEscudoMiniList: View {
+    let data: Data?
+    var body: some View {
+        if let data = data, let uiImage = UIImage(data: data) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 20, height: 20)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 0.5))
+        } else {
+            Circle()
+                .fill(Color.gray.opacity(0.15))
+                .frame(width: 20, height: 20)
+                .overlay(
+                    Image(systemName: "shield.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.gray.opacity(0.5))
+                )
+        }
+    }
+}
+
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int = UInt64()
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255,
+            opacity: Double(a) / 255
+        )
     }
 }

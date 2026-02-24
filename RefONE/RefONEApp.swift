@@ -37,7 +37,7 @@ struct RefONEApp: App {
                         Label("Configuración", systemImage: "gearshape.fill")
                     }
             }
-            .tint(.orange)
+            .tint(Color(hex: "#FF5A36"))
         }
         // Data Container Injection
         .modelContainer(for: [

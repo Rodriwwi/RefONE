@@ -52,9 +52,9 @@ struct InicioView: View {
                         .padding(.top, 5)
                     }
                     .padding(20)
-                    .background(LinearGradient(colors: [.orange, .red], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .background(LinearGradient(colors: [Color(hex: "#FF5A36"), .red], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .cornerRadius(20)
-                    .shadow(color: .orange.opacity(0.3), radius: 10, x: 0, y: 5)
+                    .shadow(color: Color(hex: "#FF5A36").opacity(0.3), radius: 10, x: 0, y: 5)
                     
                     // Próximos Partidos
                     VStack(alignment: .leading, spacing: 15) {
@@ -147,10 +147,10 @@ struct CeldaResumenInicio: View {
                     Text(partido.categoria?.nombre.uppercased() ?? "AMISTOSO")
                         .font(.caption2)
                         .bold()
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color(hex: "#FF5A36"))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.orange.opacity(0.15))
+                        .background(Color(hex: "#FF5A36").opacity(0.15))
                         .clipShape(Capsule())
                     
                     HStack(spacing: 2) {
@@ -245,20 +245,20 @@ struct FondoGridMinimalista: View {
             Color(UIColor.systemGroupedBackground)
             GeometryReader { geo in
                 ForEach(0..<8) { i in
-                    Rectangle().fill(LinearGradient(colors: [.orange.opacity(0.02), .orange.opacity(0.05), .orange.opacity(0.02)], startPoint: .top, endPoint: .bottom))
+                    Rectangle().fill(LinearGradient(colors: [Color(hex: "#FF5A36").opacity(0.02), Color(hex: "#FF5A36").opacity(0.05), Color(hex: "#FF5A36").opacity(0.02)], startPoint: .top, endPoint: .bottom))
                         .frame(width: 1).offset(x: CGFloat(i) * (geo.size.width / 7))
                 }
                 ForEach(0..<12) { i in
-                    Rectangle().fill(LinearGradient(colors: [.orange.opacity(0.02), .orange.opacity(0.05), .orange.opacity(0.02)], startPoint: .leading, endPoint: .trailing))
+                    Rectangle().fill(LinearGradient(colors: [Color(hex: "#FF5A36").opacity(0.02), Color(hex: "#FF5A36").opacity(0.05), Color(hex: "#FF5A36").opacity(0.02)], startPoint: .leading, endPoint: .trailing))
                         .frame(height: 1).offset(y: CGFloat(i) * (geo.size.height / 11))
                 }
             }
-            LinearGradient(colors: [.orange.opacity(0.08), .clear], startPoint: .topTrailing, endPoint: .center)
+            LinearGradient(colors: [Color(hex: "#FF5A36").opacity(0.08), .clear], startPoint: .topTrailing, endPoint: .center)
             LinearGradient(colors: [.clear, .red.opacity(0.06)], startPoint: .center, endPoint: .bottomLeading)
             VStack {
-                HStack { Circle().fill(Color.orange.opacity(0.15)).frame(width: 4, height: 4).padding(.top, 100).padding(.leading, 30); Spacer(); Circle().fill(Color.orange.opacity(0.12)).frame(width: 3, height: 3).padding(.top, 150).padding(.trailing, 50) }
+                HStack { Circle().fill(Color(hex: "#FF5A36").opacity(0.15)).frame(width: 4, height: 4).padding(.top, 100).padding(.leading, 30); Spacer(); Circle().fill(Color(hex: "#FF5A36").opacity(0.12)).frame(width: 3, height: 3).padding(.top, 150).padding(.trailing, 50) }
                 Spacer()
-                HStack { Circle().fill(Color.red.opacity(0.10)).frame(width: 3, height: 3).padding(.bottom, 200).padding(.leading, 80); Spacer(); Circle().fill(Color.orange.opacity(0.14)).frame(width: 4, height: 4).padding(.bottom, 150).padding(.trailing, 40) }
+                HStack { Circle().fill(Color.red.opacity(0.10)).frame(width: 3, height: 3).padding(.bottom, 200).padding(.leading, 80); Spacer(); Circle().fill(Color(hex: "#FF5A36").opacity(0.14)).frame(width: 4, height: 4).padding(.bottom, 150).padding(.trailing, 40) }
             }
         }
         .ignoresSafeArea()
