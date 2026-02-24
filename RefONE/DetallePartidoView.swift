@@ -33,7 +33,6 @@ struct HeatBin: Identifiable {
     }
 }
 
-// Estructura para el mapa virtual (0.0 a 1.0)
 struct VirtualHeatBin: Identifiable {
     let id = UUID()
     let x: Double
@@ -59,11 +58,12 @@ struct DatoZona: Identifiable {
 struct DetallePartidoView: View {
     @Bindable var partido: Partido
     @StateObject private var vm = DetallePartidoViewModel()
+    
     @State private var mostrandoEdicion = false
     @State private var mostrandoCalibrador = false
-    @State private var tipoMapa: Int = 0 // 0 = Satélite, 1 = Esquemático
+    @State private var mostrandoSelectorEntrenamiento = false
+    @State private var tipoMapa: Int = 0
     
-    // Configuración Persistente
     @AppStorage("fcMax") private var fcMax: Double = 190.0
     @AppStorage("limiteZ1") private var limiteZ1: Double = 0.60
     @AppStorage("limiteZ2") private var limiteZ2: Double = 0.70
@@ -75,14 +75,11 @@ struct DetallePartidoView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                
-                // Cabecera: Fecha y Hora
                 Text(partido.fecha.formatted(date: .long, time: .shortened))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.top, 20)
                 
-                // Cabecera: Estadio
                 HStack {
                     Image(systemName: "sportscourt")
                     Text(partido.equipoLocal?.estadio?.nombre ?? "Estadio desconocido")
@@ -90,7 +87,6 @@ struct DetallePartidoView: View {
                 .font(.headline)
                 .padding(.top, 5)
                 
-                // Marcador
                 HStack(alignment: .center, spacing: 30) {
                     VStack {
                         ImagenEscudo(data: partido.equipoLocal?.escudoData, size: 70)
@@ -116,7 +112,6 @@ struct DetallePartidoView: View {
                 }
                 .padding(.vertical, 20)
                 
-                // Coste Desplazamiento
                 if partido.costeDesplazamiento > 0 {
                     HStack {
                         Image(systemName: "car.fill")
@@ -131,17 +126,14 @@ struct DetallePartidoView: View {
                 
                 Divider().padding(.vertical, 20)
                 
-                // Analíticas de Salud
                 if vm.datosDisponibles {
                     VStack(alignment: .leading, spacing: 30) {
-                        
                         HStack {
                             Text("Rendimiento Físico").font(.title2).bold()
                             Spacer()
                         }
                         .padding(.horizontal)
                         
-                        // Grid de Métricas
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
                             DatoMetricView(titulo: "Duración", valor: vm.duracionString, icono: "stopwatch", color: .blue)
                             DatoMetricView(titulo: "Distancia", valor: String(format: "%.2f km", vm.distancia / 1000), icono: "figure.run", color: .green)
@@ -160,142 +152,68 @@ struct DetallePartidoView: View {
                         }
                         .padding(.horizontal)
                         
-                        // SECCIÓN MAPA
                         if !vm.heatMapBins.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
                                     Text("Mapa de Calor").font(.headline)
                                     Spacer()
-                                    
-                                    // Botón Calibrar (Solo en modo esquemático)
                                     if tipoMapa == 1 {
-                                        Button {
-                                            mostrandoCalibrador = true
-                                        } label: {
-                                            Image(systemName: "scope")
-                                                .font(.title3)
-                                        }
+                                        Button { mostrandoCalibrador = true } label: { Image(systemName: "scope").font(.title3) }
                                         .padding(.trailing, 8)
                                     }
-                                    
-                                    // Toggle Mapa
                                     Picker("Tipo Mapa", selection: $tipoMapa) {
                                         Image(systemName: "globe.europe.africa.fill").tag(0)
                                         Image(systemName: "square.grid.2x2").tag(1)
                                     }
-                                    .pickerStyle(.segmented)
-                                    .frame(width: 120)
-                                    // 👇 CAMBIO 1: DETECCIÓN AUTOMÁTICA DE FALTA DE CALIBRACIÓN
-                                    .onChange(of: tipoMapa) { _, nuevoValor in
-                                        if nuevoValor == 1 && vm.esquinasUsuario.count < 3 {
-                                            // Si pasamos a Esquemático y no está calibrado, abrimos ventana
-                                            mostrandoCalibrador = true
-                                        }
+                                    .pickerStyle(.segmented).frame(width: 120)
+                                    .onChange(of: tipoMapa) { _, nuevo in
+                                        if nuevo == 1 && vm.esquinasUsuario.count < 3 { mostrandoCalibrador = true }
                                     }
                                 }
                                 .padding(.horizontal)
                                 
                                 ZStack {
                                     if tipoMapa == 0 {
-                                        // 1. MAPA REAL (SATÉLITE)
                                         Map {
                                             ForEach(vm.heatMapBins) { bin in
                                                 MapPolygon(coordinates: bin.polygonCoordinates(gridSizeDegrees: heatGridSize))
                                                     .foregroundStyle(bin.color)
                                             }
-                                        }
-                                        .mapStyle(.imagery(elevation: .realistic))
-                                        
+                                        }.mapStyle(.imagery(elevation: .realistic))
                                     } else {
-                                        // 2. MAPA VIRTUAL (ESQUEMÁTICO) - CON CANVAS
-                                        CampoFutbolView()
-                                            .overlay {
-                                                GeometryReader { geo in
-                                                    Canvas { context, size in
-                                                        let radioPunto = size.width * 0.08
-                                                        
-                                                        for bin in vm.virtualHeatBins {
-                                                            let xPos = bin.x * size.width
-                                                            let yPos = bin.y * size.height
-                                                            
-                                                            let rect = CGRect(
-                                                                x: xPos - (radioPunto / 2),
-                                                                y: yPos - (radioPunto / 2),
-                                                                width: radioPunto,
-                                                                height: radioPunto
-                                                            )
-                                                            
-                                                            context.fill(
-                                                                Path(ellipseIn: rect),
-                                                                with: .color(bin.color.opacity(0.4))
-                                                            )
-                                                        }
+                                        CampoFutbolView().overlay {
+                                            GeometryReader { geo in
+                                                Canvas { context, size in
+                                                    let radio = size.width * 0.08
+                                                    for bin in vm.virtualHeatBins {
+                                                        let rect = CGRect(x: (bin.x * size.width) - (radio/2), y: (bin.y * size.height) - (radio/2), width: radio, height: radio)
+                                                        context.fill(Path(ellipseIn: rect), with: .color(bin.color.opacity(0.4)))
                                                     }
-                                                    .blur(radius: 10)
-                                                    .mask(RoundedRectangle(cornerRadius: 8))
-                                                }
+                                                }.blur(radius: 10).mask(RoundedRectangle(cornerRadius: 8))
                                             }
+                                        }
                                     }
-                                }
-                                .frame(height: 450)
-                                .cornerRadius(12)
-                                .padding(.horizontal)
-                                .animation(.easeInOut, value: tipoMapa)
-                                
-                                Text(tipoMapa == 0 ? "Vista satélite real basada en coordenadas GPS." : "Vista esquemática. Si el campo no encaja, pulsa la mirilla para calibrar esquinas.")
-                                    .font(.caption2).italic().foregroundStyle(.secondary).padding(.horizontal)
+                                }.frame(height: 450).cornerRadius(12).padding(.horizontal).animation(.easeInOut, value: tipoMapa)
                             }
                         }
                         
-                        // Gráfica de Zonas Cardíacas
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Zonas de Esfuerzo").font(.headline).padding(.horizontal)
-                            
                             Chart(vm.zonasCardiacas) { zona in
                                 BarMark(x: .value("Zona", zona.nombre), y: .value("Minutos", zona.minutos))
-                                    .foregroundStyle(zona.color)
-                                    .cornerRadius(4)
-                                    .annotation(position: .top) {
-                                        Text("\(String(format: "%.0f", zona.minutos))m").font(.caption2).foregroundStyle(.secondary)
-                                    }
-                            }
-                            .chartYAxisLabel("Minutos")
-                            .frame(height: 220)
-                            .padding(.horizontal)
+                                    .foregroundStyle(zona.color).cornerRadius(4)
+                                    .annotation(position: .top) { Text("\(String(format: "%.0f", zona.minutos))m").font(.caption2).foregroundStyle(.secondary) }
+                            }.chartYAxisLabel("Minutos").frame(height: 220).padding(.horizontal)
                             
-                            // Leyenda Dinámica
                             VStack(spacing: 8) {
                                 Group {
-                                    HStack {
-                                        Circle().fill(Color.blue.opacity(0.6)).frame(width: 8, height: 8)
-                                        Text("Zona 1 (< \(Int(fcMax * limiteZ1)) bpm)")
-                                        Spacer()
-                                    }
-                                    HStack {
-                                        Circle().fill(Color.green.opacity(0.8)).frame(width: 8, height: 8)
-                                        Text("Zona 2 (\(Int(fcMax * limiteZ1))-\(Int(fcMax * limiteZ2)) bpm)")
-                                        Spacer()
-                                    }
-                                    HStack {
-                                        Circle().fill(Color.yellow).frame(width: 8, height: 8)
-                                        Text("Zona 3 (\(Int(fcMax * limiteZ2))-\(Int(fcMax * limiteZ3)) bpm)")
-                                        Spacer()
-                                    }
-                                    HStack {
-                                        Circle().fill(Color.orange).frame(width: 8, height: 8)
-                                        Text("Zona 4 (\(Int(fcMax * limiteZ3))-\(Int(fcMax * limiteZ4)) bpm)")
-                                        Spacer()
-                                    }
-                                    HStack {
-                                        Circle().fill(Color.red).frame(width: 8, height: 8)
-                                        Text("Zona 5 (> \(Int(fcMax * limiteZ4)) bpm)")
-                                        Spacer()
-                                    }
-                                }
-                                .font(.caption2).foregroundStyle(.secondary)
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 10)
+                                    HStack { Circle().fill(Color.blue.opacity(0.6)).frame(width: 8, height: 8); Text("Zona 1 (< \(Int(fcMax * limiteZ1)) bpm)"); Spacer() }
+                                    HStack { Circle().fill(Color.green.opacity(0.8)).frame(width: 8, height: 8); Text("Zona 2 (\(Int(fcMax * limiteZ1))-\(Int(fcMax * limiteZ2)) bpm)"); Spacer() }
+                                    HStack { Circle().fill(Color.yellow).frame(width: 8, height: 8); Text("Zona 3 (\(Int(fcMax * limiteZ2))-\(Int(fcMax * limiteZ3)) bpm)"); Spacer() }
+                                    HStack { Circle().fill(Color.orange).frame(width: 8, height: 8); Text("Zona 4 (\(Int(fcMax * limiteZ3))-\(Int(fcMax * limiteZ4)) bpm)"); Spacer() }
+                                    HStack { Circle().fill(Color.red).frame(width: 8, height: 8); Text("Zona 5 (> \(Int(fcMax * limiteZ4)) bpm)"); Spacer() }
+                                }.font(.caption2).foregroundStyle(.secondary)
+                            }.padding(.horizontal, 20).padding(.bottom, 10)
                         }
                     }
                 } else if vm.cargando {
@@ -308,6 +226,12 @@ struct DetallePartidoView: View {
                         Label("Datos no disponibles", systemImage: "heart.slash.circle")
                     } description: {
                         Text(vm.mensajeError ?? "No se encontró información del reloj para este partido.")
+                    } actions: {
+                        Button("Vincular entrenamiento") {
+                            mostrandoSelectorEntrenamiento = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .padding(.top, 10)
                     }
                     .padding(.top, 40)
                 }
@@ -328,8 +252,11 @@ struct DetallePartidoView: View {
         .sheet(isPresented: $mostrandoCalibrador) {
             CalibradorCampoView(rutaGPS: vm.rutaCoordenadasPublica) { esquinas in
                 vm.esquinasUsuario = esquinas
-                vm.generarMapaCalor() // Recalcula con la calibración
+                vm.generarMapaCalor()
             }
+        }
+        .sheet(isPresented: $mostrandoSelectorEntrenamiento) {
+            SelectorEntrenamientoView(vm: vm, partido: partido)
         }
         .onAppear {
             vm.actualizarConfiguracion(fcMax: fcMax, l1: limiteZ1, l2: limiteZ2, l3: limiteZ3, l4: limiteZ4)
@@ -339,6 +266,59 @@ struct DetallePartidoView: View {
             if vm.distancia > 0 {
                 partido.distanciaRecorrida = vm.distancia
                 partido.caloriasQuemadas = vm.calorias
+            }
+        }
+    }
+}
+
+// MARK: - Vista Selector Entrenamiento Manual
+
+struct SelectorEntrenamientoView: View {
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject var vm: DetallePartidoViewModel
+    var partido: Partido
+    
+    var body: some View {
+        NavigationStack {
+            List(vm.entrenamientosRecientes, id: \.uuid) { workout in
+                Button {
+                    vm.vincularEntrenamiento(workout, a: partido)
+                    dismiss()
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(workout.startDate.formatted(date: .abbreviated, time: .shortened))
+                            .font(.headline)
+                        
+                        HStack {
+                            Text("\(Int(workout.duration / 60)) min")
+                            if let kcal = workout.totalEnergyBurned?.doubleValue(for: .kilocalorie()) {
+                                Text("• \(Int(kcal)) kcal")
+                            }
+                            if let dist = workout.totalDistance?.doubleValue(for: .meter()) {
+                                Text("• \(String(format: "%.2f", dist / 1000)) km")
+                            }
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .foregroundStyle(.primary)
+            }
+            .navigationTitle("Últimos Entrenamientos")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") { dismiss() }
+                }
+            }
+            .overlay {
+                if vm.entrenamientosRecientes.isEmpty {
+                    ProgressView()
+                }
+            }
+            .onAppear {
+                vm.buscarEntrenamientosRecientes()
             }
         }
     }
@@ -423,6 +403,7 @@ struct EditarPartidoView: View {
             }
         }
     }
+    
     func guardarCambios() {
         partido.costeDesplazamiento = coste
         partido.golesLocal = golesL
@@ -454,17 +435,17 @@ class DetallePartidoViewModel: ObservableObject {
     @Published var pasosTotales: Int = 0
     @Published var zonasCardiacas: [DatoZona] = []
     
-    // Arrays para Mapas
     @Published var heatMapBins: [HeatBin] = []
     @Published var virtualHeatBins: [VirtualHeatBin] = []
     @Published var rutaCoordenadasPublica: [CLLocationCoordinate2D] = []
-    @Published var esquinasUsuario: [CLLocationCoordinate2D] = [] // Calibración
+    @Published var esquinasUsuario: [CLLocationCoordinate2D] = []
+    
+    @Published var entrenamientosRecientes: [HKWorkout] = []
     
     private var rutaCoordenadasRaw: [CLLocationCoordinate2D] = []
     private let healthStore = HKHealthStore()
     private let calculationGridSize = 0.00002
     
-    // Configuración
     private var fcMax: Double = 190.0
     private var limitZ1: Double = 0.60
     private var limitZ2: Double = 0.70
@@ -480,7 +461,7 @@ class DetallePartidoViewModel: ObservableObject {
         solicitarPermisosLectura()
         
         guard let id = id else {
-            DispatchQueue.main.async { self.mensajeError = "Este partido se creó manualmente en el iPhone sin vincular un entrenamiento del reloj."; self.cargando = false }
+            DispatchQueue.main.async { self.mensajeError = "No hay datos vinculados. Puedes asignar un entrenamiento manualmente."; self.cargando = false }
             return
         }
         
@@ -493,6 +474,28 @@ class DetallePartidoViewModel: ObservableObject {
             DispatchQueue.main.async { self.procesarDatosReales(workout: workout) }
         }
         healthStore.execute(query)
+    }
+    
+    func buscarEntrenamientosRecientes() {
+        solicitarPermisosLectura()
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+        
+        let query = HKSampleQuery(sampleType: HKObjectType.workoutType(), predicate: nil, limit: 15, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+            guard let workouts = samples as? [HKWorkout] else { return }
+            DispatchQueue.main.async {
+                self.entrenamientosRecientes = workouts
+            }
+        }
+        healthStore.execute(query)
+    }
+    
+    func vincularEntrenamiento(_ workout: HKWorkout, a partido: Partido) {
+        partido.workoutID = workout.uuid
+        self.cargando = true
+        self.mensajeError = nil
+        DispatchQueue.main.async {
+            self.procesarDatosReales(workout: workout)
+        }
     }
     
     func solicitarPermisosLectura() {
@@ -513,8 +516,6 @@ class DetallePartidoViewModel: ObservableObject {
         self.cargarRuta(workout: workout)
         self.calcularZonasReales(workout: workout)
     }
-    
-    // --- Cargas de Datos ---
     
     func cargarVelocidadMaxima(workout: HKWorkout) {
         guard let type = HKQuantityType.quantityType(forIdentifier: .runningSpeed) else { return }
@@ -614,11 +615,9 @@ class DetallePartidoViewModel: ObservableObject {
         return puntos.filter { CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: centro) < 85.0 }
     }
     
-    // MARK: - Generación de Mapas (Real y Virtual Calibrado)
     func generarMapaCalor() {
         guard !rutaCoordenadasRaw.isEmpty else { return }
         
-        // 1. MAPA REAL (Satélite)
         var gridCounts: [GridKey: Int] = [:]
         var maxCount = 0
         
@@ -642,7 +641,6 @@ class DetallePartidoViewModel: ObservableObject {
         }
         self.heatMapBins = realBins
         
-        // 2. MAPA VIRTUAL (Elección: Calibrado vs Automático)
         if esquinasUsuario.count == 3 {
             generarMapaVirtualCalibrado(puntos: rutaCoordenadasRaw, esquinas: esquinasUsuario)
         } else {
@@ -655,7 +653,6 @@ class DetallePartidoViewModel: ObservableObject {
         let pTR = MKMapPoint(esquinas[1])
         let pBL = MKMapPoint(esquinas[2])
         
-        // Vectores Base (Ejes U y V)
         let vectorU = (x: pTR.x - pTL.x, y: pTR.y - pTL.y)
         let lenU_sq = vectorU.x * vectorU.x + vectorU.y * vectorU.y
         
@@ -669,11 +666,9 @@ class DetallePartidoViewModel: ObservableObject {
             let p = MKMapPoint(coord)
             let vecP = (x: p.x - pTL.x, y: p.y - pTL.y)
             
-            // Proyección escalar
             let projU = (vecP.x * vectorU.x + vecP.y * vectorU.y) / lenU_sq
             let projV = (vecP.x * vectorV.x + vecP.y * vectorV.y) / lenV_sq
             
-            // Filtro con margen
             if projU >= -0.1 && projU <= 1.1 && projV >= -0.1 && projV <= 1.1 {
                 let cellX = Int(projU * 40)
                 let cellY = Int(projV * 60)
@@ -700,7 +695,6 @@ class DetallePartidoViewModel: ObservableObject {
         self.virtualHeatBins = bins
     }
     
-    // Versión automática (PCA) si no hay calibración
     private func generarMapaVirtualAutomatico(puntos: [CLLocationCoordinate2D]) {
         let puntosPlanos = puntos.map { MKMapPoint($0) }
         let centroX = puntosPlanos.map { $0.x }.reduce(0, +) / Double(puntosPlanos.count)
@@ -816,19 +810,15 @@ struct CalibradorCampoView: View {
                 .frame(maxWidth: .infinity)
                 .background(.regularMaterial)
                 
-                // Contenedor del Mapa
                 GeometryReader { geo in
                     MapReader { proxy in
                         ZStack {
-                            // 1. EL MAPA
                             Map(position: $position) {
-                                // Ruta de referencia (Azul flojo)
                                 if !rutaGPS.isEmpty {
                                     MapPolyline(coordinates: rutaGPS)
                                         .stroke(.blue.opacity(0.3), lineWidth: 4)
                                 }
                                 
-                                // Puntos ya marcados
                                 ForEach(0..<esquinas.count, id: \.self) { i in
                                     Annotation("P\(i+1)", coordinate: esquinas[i]) {
                                         Image(systemName: "\(i+1).circle.fill")
@@ -840,7 +830,6 @@ struct CalibradorCampoView: View {
                                     }
                                 }
                                 
-                                // Previsualización del campo (Verde)
                                 if esquinas.count == 3 {
                                     MapPolygon(coordinates: calcularRectangulo(p1: esquinas[0], p2: esquinas[1], p3: esquinas[2]))
                                         .foregroundStyle(.green.opacity(0.3))
@@ -849,8 +838,6 @@ struct CalibradorCampoView: View {
                             }
                             .mapStyle(.imagery(elevation: .realistic))
                             
-                            // 2. MIRILLA CENTRAL (CROSSHAIR)
-                            // Solo se muestra si faltan puntos por poner
                             if esquinas.count < 3 {
                                 ZStack {
                                     Circle()
@@ -864,18 +851,14 @@ struct CalibradorCampoView: View {
                                 .frame(width: 50, height: 50)
                             }
                             
-                            // 3. BOTÓN DE ACCIÓN (FLOTANTE)
                             VStack {
                                 Spacer()
                                 
                                 if esquinas.count < 3 {
                                     Button {
-                                        // MAGIA: Obtenemos la coordenada justo del centro de la vista
-                                        // Usamos geo.size para saber el centro exacto del área del mapa
                                         let centroPantalla = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
                                         
                                         if let coordenada = proxy.convert(centroPantalla, from: .local) {
-                                            // Pequeña vibración de confirmación
                                             let generator = UIImpactFeedbackGenerator(style: .medium)
                                             generator.impactOccurred()
                                             
@@ -900,7 +883,6 @@ struct CalibradorCampoView: View {
                                 }
                             }
                             
-                            // 4. BOTÓN DESHACER (FLOTANTE ARRIBA)
                             if !esquinas.isEmpty {
                                 VStack {
                                     HStack {
@@ -943,7 +925,6 @@ struct CalibradorCampoView: View {
         }
     }
     
-    // Función auxiliar matemática
     func calcularRectangulo(p1: CLLocationCoordinate2D, p2: CLLocationCoordinate2D, p3: CLLocationCoordinate2D) -> [CLLocationCoordinate2D] {
         let mp1 = MKMapPoint(p1)
         let mp2 = MKMapPoint(p2)
@@ -952,7 +933,6 @@ struct CalibradorCampoView: View {
         let vecX = mp2.x - mp1.x
         let vecY = mp2.y - mp1.y
         
-        // P4 es P3 + el vector que va de P1 a P2
         let mp4 = MKMapPoint(x: mp3.x + vecX, y: mp3.y + vecY)
         return [p1, p2, mp4.coordinate, p3]
     }

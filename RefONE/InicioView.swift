@@ -2,10 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct InicioView: View {
-    // Persistent Storage
     @AppStorage("nombreUsuario") private var nombreUsuario: String = "Árbitro"
-    
-    // Data Query
     @Query(sort: \Partido.fecha, order: .forward) private var partidos: [Partido]
     
     var body: some View {
@@ -13,7 +10,7 @@ struct InicioView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 25) {
                     
-                    // MARK: - Cabecera (Header) con Logo a la derecha
+                    // Header
                     HStack(alignment: .center) {
                         VStack(alignment: .leading, spacing: 5) {
                             Text("Hola, \(nombreUsuario)")
@@ -26,9 +23,7 @@ struct InicioView: View {
                                 .font(.title3)
                                 .foregroundStyle(.secondary)
                         }
-                        
                         Spacer()
-                        
                         Image("LogoApp")
                             .resizable()
                             .scaledToFit()
@@ -36,7 +31,7 @@ struct InicioView: View {
                     }
                     .padding(.top, 20)
                     
-                    // MARK: - Monthly Summary Card
+                    // Resumen Mensual
                     VStack(alignment: .leading, spacing: 15) {
                         HStack {
                             Text("Este mes")
@@ -49,31 +44,19 @@ struct InicioView: View {
                         
                         HStack(spacing: 20) {
                             DatoResumenView(valor: "\(partidosMes.count)", etiqueta: "Partidos")
-                            
-                            Divider()
-                                .background(.white.opacity(0.5))
-                            
+                            Divider().background(.white.opacity(0.5))
                             DatoResumenView(valor: "\(golesMes)", etiqueta: "Goles")
-                            
-                            Divider()
-                                .background(.white.opacity(0.5))
-                            
+                            Divider().background(.white.opacity(0.5))
                             DatoResumenView(valor: String(format: "%.0f€", gananciasMes), etiqueta: "Ganado")
                         }
                         .padding(.top, 5)
                     }
                     .padding(20)
-                    .background(
-                        LinearGradient(
-                            colors: [.orange, .red],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .background(LinearGradient(colors: [.orange, .red], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .cornerRadius(20)
                     .shadow(color: .orange.opacity(0.3), radius: 10, x: 0, y: 5)
                     
-                    // MARK: - Upcoming Matches
+                    // Próximos Partidos
                     VStack(alignment: .leading, spacing: 15) {
                         Text("Próximos Partidos")
                             .font(.title2)
@@ -108,110 +91,12 @@ struct InicioView: View {
                 .padding(.bottom, 30)
             }
             .navigationBarHidden(true)
-            .background(
-                // MARK: - Fondo con Grid Pattern Minimalista
-                ZStack {
-                    // Color base
-                    Color(UIColor.systemGroupedBackground)
-                    
-                    // Patrón de grid sutil
-                    GeometryReader { geometry in
-                        // Líneas verticales
-                        ForEach(0..<8) { i in
-                            Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.orange.opacity(0.02),
-                                            Color.orange.opacity(0.05),
-                                            Color.orange.opacity(0.02)
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .frame(width: 1)
-                                .offset(x: CGFloat(i) * (geometry.size.width / 7))
-                        }
-                        
-                        // Líneas horizontales
-                        ForEach(0..<12) { i in
-                            Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.orange.opacity(0.02),
-                                            Color.orange.opacity(0.05),
-                                            Color.orange.opacity(0.02)
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(height: 1)
-                                .offset(y: CGFloat(i) * (geometry.size.height / 11))
-                        }
-                    }
-                    
-                    // Gradiente diagonal superior
-                    LinearGradient(
-                        colors: [
-                            Color.orange.opacity(0.08),
-                            Color.clear
-                        ],
-                        startPoint: .topTrailing,
-                        endPoint: .center
-                    )
-                    
-                    // Gradiente diagonal inferior
-                    LinearGradient(
-                        colors: [
-                            Color.clear,
-                            Color.red.opacity(0.06)
-                        ],
-                        startPoint: .center,
-                        endPoint: .bottomLeading
-                    )
-                    
-                    // Puntos decorativos en esquinas
-                    VStack {
-                        HStack {
-                            Circle()
-                                .fill(Color.orange.opacity(0.15))
-                                .frame(width: 4, height: 4)
-                                .padding(.top, 100)
-                                .padding(.leading, 30)
-                            Spacer()
-                            Circle()
-                                .fill(Color.orange.opacity(0.12))
-                                .frame(width: 3, height: 3)
-                                .padding(.top, 150)
-                                .padding(.trailing, 50)
-                        }
-                        Spacer()
-                        HStack {
-                            Circle()
-                                .fill(Color.red.opacity(0.10))
-                                .frame(width: 3, height: 3)
-                                .padding(.bottom, 200)
-                                .padding(.leading, 80)
-                            Spacer()
-                            Circle()
-                                .fill(Color.orange.opacity(0.14))
-                                .frame(width: 4, height: 4)
-                                .padding(.bottom, 150)
-                                .padding(.trailing, 40)
-                        }
-                    }
-                }
-                .ignoresSafeArea()
-            )
+            .background(FondoGridMinimalista())
         }
     }
 }
 
-// MARK: - Computed Logic y Subviews
-
+// MARK: - Lógica y Extensiones
 extension InicioView {
     var partidosMes: [Partido] {
         let now = Date()
@@ -226,9 +111,7 @@ extension InicioView {
     
     var gananciasMes: Double {
         partidosMes.reduce(0.0) { total, p in
-            let tarifa = p.actuadoComoPrincipal
-                ? (p.categoria?.tarifaPrincipal ?? 0)
-                : (p.categoria?.tarifaAsistente ?? 0)
+            let tarifa = p.actuadoComoPrincipal ? (p.categoria?.tarifaPrincipal ?? 0) : (p.categoria?.tarifaAsistente ?? 0)
             return total + tarifa + p.costeDesplazamiento
         }
     }
@@ -238,100 +121,146 @@ extension InicioView {
     }
 }
 
+// MARK: - Subvistas
+
 struct DatoResumenView: View {
-    let valor: String
-    let etiqueta: String
-    
+    let valor: String; let etiqueta: String
     var body: some View {
         VStack(alignment: .leading) {
-            Text(valor)
-                .font(.system(size: 24, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
-            Text(etiqueta)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.9))
-                .fontWeight(.medium)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+            Text(valor).font(.system(size: 24, weight: .heavy, design: .rounded)).foregroundStyle(.white)
+            Text(etiqueta).font(.caption).foregroundStyle(.white.opacity(0.9)).fontWeight(.medium)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+
+// MARK: - CELDA REDISEÑADA
 
 struct CeldaResumenInicio: View {
     let partido: Partido
     
     var body: some View {
-        HStack(spacing: 0) {
-            // Visual Indicator Strip
-            VStack(spacing: 0) {
-                Color(partido.equipoLocal?.colorHex.toColor() ?? .gray)
-                Color(partido.equipoVisitante?.colorVisitanteHex.toColor() ?? .gray)
-            }
-            .frame(width: 6)
-            
-            // Content
-            HStack {
-                VStack(alignment: .leading, spacing: 6) {
-                    // Meta: Category & Stadium
-                    HStack {
-                        Text(partido.categoria?.nombre.uppercased() ?? "AMISTOSO")
-                            .font(.caption2)
-                            .bold()
-                            .foregroundStyle(.orange)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(4)
-                        
-                        HStack(spacing: 2) {
-                            Image(systemName: "sportscourt")
-                            Text(partido.equipoLocal?.estadio?.nombre ?? "Campo")
-                        }
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                
+                // Cabecera: Categoría y Estadio
+                HStack(spacing: 6) {
+                    Text(partido.categoria?.nombre.uppercased() ?? "AMISTOSO")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    }
-                    
-                    // Teams
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(partido.equipoLocal?.nombre ?? "Local")
-                            .font(.headline)
-                            .lineLimit(1)
-                        
-                        Text("vs")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .padding(.leading, 2)
-                        
-                        Text(partido.equipoVisitante?.nombre ?? "Visitante")
-                            .font(.headline)
-                            .lineLimit(1)
-                    }
-                }
-                
-                Spacer()
-                
-                // Date & Time Block
-                VStack(alignment: .center, spacing: 2) {
-                    Text(partido.fecha.formatted(.dateTime.day()))
-                        .font(.title2)
                         .bold()
-                    Text(partido.fecha.formatted(.dateTime.month(.abbreviated)))
-                        .font(.caption)
-                        .textCase(.uppercase)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.15))
+                        .clipShape(Capsule())
                     
-                    Text(partido.fecha.formatted(date: .omitted, time: .shortened))
-                        .font(.caption2)
-                        .padding(.top, 4)
-                        .foregroundStyle(.gray)
+                    HStack(spacing: 2) {
+                        Image(systemName: "mappin.and.ellipse")
+                        Text(partido.equipoLocal?.estadio?.nombre ?? "Sin campo")
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 }
-                .padding(.leading, 10)
-                .frame(minWidth: 50)
+                
+                // Bloque de Equipos (Con color y escudo integrados)
+                VStack(alignment: .leading, spacing: 6) {
+                    // Equipo Local
+                    HStack(spacing: 8) {
+                        IndicadorColorEquipacion(hex: partido.equipoLocal?.colorHex ?? "#808080")
+                        ImagenEscudoMini(data: partido.equipoLocal?.escudoData)
+                        Text(partido.equipoLocal?.nombre ?? "Local")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+                    }
+                    
+                    // Equipo Visitante
+                    HStack(spacing: 8) {
+                        IndicadorColorEquipacion(hex: partido.equipoVisitante?.colorVisitanteHex ?? "#F0F0F0")
+                        ImagenEscudoMini(data: partido.equipoVisitante?.escudoData)
+                        Text(partido.equipoVisitante?.nombre ?? "Visitante")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+                    }
+                }
             }
-            .padding()
+            
+            Spacer(minLength: 0)
+            
+            // Bloque de Fecha y Hora
+            VStack(alignment: .center, spacing: 2) {
+                Text(partido.fecha.formatted(.dateTime.day()))
+                    .font(.title3)
+                    .bold()
+                Text(partido.fecha.formatted(.dateTime.month(.abbreviated)))
+                    .font(.caption2)
+                    .textCase(.uppercase)
+                    .foregroundStyle(.red)
+                
+                Text(partido.fecha.formatted(date: .omitted, time: .shortened))
+                    .font(.caption2)
+                    .padding(.top, 4)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(Color.gray.opacity(0.08))
+            .cornerRadius(10)
         }
+        .padding(14)
         .background(Color(UIColor.secondarySystemGroupedBackground))
-        .cornerRadius(12)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 2)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.04), radius: 5, x: 0, y: 2)
+    }
+}
+
+// MARK: - Componentes Pequeños para la Celda
+
+// Nuevo: Indicador de color circular simple
+struct IndicadorColorEquipacion: View {
+    let hex: String
+    var body: some View {
+        Circle()
+            .fill(hex.toColor())
+            .frame(width: 12, height: 12)
+            .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
+    }
+}
+
+struct ImagenEscudoMini: View {
+    let data: Data?
+    var body: some View {
+        if let data = data, let uiImage = UIImage(data: data) {
+            Image(uiImage: uiImage).resizable().scaledToFill().frame(width: 20, height: 20).clipShape(Circle()).overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 0.5))
+        } else {
+            Circle().fill(Color.gray.opacity(0.15)).frame(width: 20, height: 20).overlay(Image(systemName: "shield.fill").font(.system(size: 9)).foregroundStyle(.gray.opacity(0.5)))
+        }
+    }
+}
+
+struct FondoGridMinimalista: View {
+    var body: some View {
+        ZStack {
+            Color(UIColor.systemGroupedBackground)
+            GeometryReader { geo in
+                ForEach(0..<8) { i in
+                    Rectangle().fill(LinearGradient(colors: [.orange.opacity(0.02), .orange.opacity(0.05), .orange.opacity(0.02)], startPoint: .top, endPoint: .bottom))
+                        .frame(width: 1).offset(x: CGFloat(i) * (geo.size.width / 7))
+                }
+                ForEach(0..<12) { i in
+                    Rectangle().fill(LinearGradient(colors: [.orange.opacity(0.02), .orange.opacity(0.05), .orange.opacity(0.02)], startPoint: .leading, endPoint: .trailing))
+                        .frame(height: 1).offset(y: CGFloat(i) * (geo.size.height / 11))
+                }
+            }
+            LinearGradient(colors: [.orange.opacity(0.08), .clear], startPoint: .topTrailing, endPoint: .center)
+            LinearGradient(colors: [.clear, .red.opacity(0.06)], startPoint: .center, endPoint: .bottomLeading)
+            VStack {
+                HStack { Circle().fill(Color.orange.opacity(0.15)).frame(width: 4, height: 4).padding(.top, 100).padding(.leading, 30); Spacer(); Circle().fill(Color.orange.opacity(0.12)).frame(width: 3, height: 3).padding(.top, 150).padding(.trailing, 50) }
+                Spacer()
+                HStack { Circle().fill(Color.red.opacity(0.10)).frame(width: 3, height: 3).padding(.bottom, 200).padding(.leading, 80); Spacer(); Circle().fill(Color.orange.opacity(0.14)).frame(width: 4, height: 4).padding(.bottom, 150).padding(.trailing, 40) }
+            }
+        }
+        .ignoresSafeArea()
     }
 }
